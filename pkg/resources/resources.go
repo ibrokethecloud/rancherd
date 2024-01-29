@@ -103,7 +103,8 @@ func ToBootstrapFile(config *config.Config, path string) (*applyinator.File, err
 				"name":      "local",
 				"namespace": "fleet-local",
 				"labels": map[string]interface{}{
-					"rke.cattle.io/init-node-machine-id": id,
+					"rke.cattle.io/init-node-machine-id":             id,
+					"provisioning.cattle.io/management-cluster-name": "local",
 				},
 			},
 			"spec": map[string]interface{}{
