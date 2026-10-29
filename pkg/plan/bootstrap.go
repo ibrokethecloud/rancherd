@@ -6,10 +6,8 @@ import (
 
 	"github.com/rancher/system-agent/pkg/applyinator"
 
-	"github.com/harvester/rancherd/pkg/cacerts"
 	"github.com/harvester/rancherd/pkg/config"
 	"github.com/harvester/rancherd/pkg/discovery"
-	"github.com/harvester/rancherd/pkg/join"
 	"github.com/harvester/rancherd/pkg/kubectl"
 	"github.com/harvester/rancherd/pkg/probe"
 	"github.com/harvester/rancherd/pkg/registry"
@@ -42,6 +40,10 @@ func toInitPlan(config *config.Config, dataDir string) (*applyinator.Plan, error
 }
 
 func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
+	k8sVersion, err := versions.K8sVersion(cfg.KubernetesVersion)
+	if err != nil {
+		return nil, err
+	}
 	if cfg.Server == "" {
 		return nil, fmt.Errorf("server is required in config for all roles besides cluster-init")
 	}
@@ -50,18 +52,34 @@ func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
 	}
 
 	plan := plan{}
-	if err := plan.addFile(cacerts.ToFile(cfg.Server, cfg.Token)); err != nil {
+
+	runtimeName := config.GetRuntime(k8sVersion)
+
+	// config.yaml
+	if err := plan.addFile(runtime.ToJoinFile(&cfg.RuntimeConfig, runtimeName, true)); err != nil {
 		return nil, err
 	}
-	if err := plan.addFile(join.ToScriptFile(cfg, dataDir)); err != nil {
+
+	// registries.yaml
+	if err := plan.addFile(registry.ToFile(cfg.Registries, runtimeName)); err != nil {
 		return nil, err
 	}
-	if err := plan.addInstruction(cacerts.ToUpdateCACertificatesInstruction()); err != nil {
+
+	// install rke2
+	if err := plan.addInstruction(runtime.ToJoinInstruction(cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
 		return nil, err
 	}
-	if err := plan.addInstruction(join.ToInstruction(cfg, dataDir)); err != nil {
+
+	// enable rke2 agent systemd unit
+	if err := plan.addInstruction(runtime.ToEnableRKE2Agent("", "", k8sVersion)); err != nil {
 		return nil, err
 	}
+
+	// start rke2 agent
+	if err := plan.addInstruction(runtime.ToStartRKE2Agent("", "", k8sVersion)); err != nil {
+		return nil, err
+	}
+
 	if err := plan.addInstruction(probe.ToInstruction()); err != nil {
 		return nil, err
 	}
