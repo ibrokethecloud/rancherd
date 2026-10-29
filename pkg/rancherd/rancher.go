@@ -176,6 +176,40 @@ func (r *Rancherd) Run(ctx context.Context) error {
 	}
 }
 
+func (r *Rancherd) RunPromote(ctx context.Context) error {
+	if done, err := r.done(); err != nil {
+		return fmt.Errorf("checking done stamp [%s]: %w", r.DoneStamp(), err)
+	} else if done {
+		logrus.Infof("System is already bootstrapped. To force the system to be bootstrapped again run with the --force flag")
+		return nil
+	}
+
+	cfg, err := config.Load(r.cfg.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if err := r.setWorking(cfg); err != nil {
+		return fmt.Errorf("saving working config to %s: %w", r.WorkingStamp(), err)
+	}
+
+	promotePlan, err := plan.ToPromotePlan(&cfg)
+	if err != nil {
+		return err
+	}
+
+	if err := plan.Run(ctx, &cfg, promotePlan, r.cfg.DataDir); err != nil {
+		return fmt.Errorf("running plan: %w", err)
+	}
+
+	if err := r.setDone(cfg); err != nil {
+		return err
+	}
+
+	logrus.Infof("Successfully promoted node K8s")
+	return nil
+}
+
 func (r *Rancherd) writeConfig(path string, cfg config.Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0600); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)

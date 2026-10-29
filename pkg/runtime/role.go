@@ -91,8 +91,8 @@ func GetRancherConfigLocation(runtime config.Runtime) string {
 	return fmt.Sprintf("/etc/rancher/%s/config.yaml.d/50-rancher.yaml", runtime)
 }
 
-func ToJoinFile(config *config.RuntimeConfig, runtime config.Runtime, clusterInit bool) (*applyinator.File, error) {
-	data, err := ToJoinConfig(config, clusterInit)
+func ToJoinFile(config *config.RuntimeConfig, runtime config.Runtime, serverURL string) (*applyinator.File, error) {
+	data, err := ToJoinConfig(config, serverURL)
 	if err != nil {
 		return nil, err
 	}
@@ -102,14 +102,12 @@ func ToJoinFile(config *config.RuntimeConfig, runtime config.Runtime, clusterIni
 	}, nil
 }
 
-func ToJoinConfig(config *config.RuntimeConfig, clusterInit bool) ([]byte, error) {
+func ToJoinConfig(config *config.RuntimeConfig, server string) ([]byte, error) {
 	configObjects := []interface{}{
 		config.ConfigValues,
 	}
 
-	if clusterInit {
-		configObjects = append(configObjects, config)
-	}
+	configObjects = append(configObjects, config)
 
 	result := map[string]interface{}{}
 	for _, data := range configObjects {
@@ -119,6 +117,52 @@ func ToJoinConfig(config *config.RuntimeConfig, clusterInit bool) ([]byte, error
 		}
 		delete(data, "extraConfig")
 		delete(data, "rancherValues")
+		data["server"] = server
+		for oldKey, newKey := range normalizeNames {
+			value, ok := data[oldKey]
+			if !ok {
+				continue
+			}
+			delete(data, oldKey)
+			data[newKey] = value
+		}
+		for k, v := range data {
+			newKey := strings.ReplaceAll(convert.ToYAMLKey(k), "_", "-")
+			result[newKey] = v
+		}
+	}
+
+	return yaml.Marshal(result)
+}
+
+func ToPromoteFile(config *config.RuntimeConfig, runtime config.Runtime, serverURL string) (*applyinator.File, error) {
+	data, err := ToPromoteConfig(config, serverURL)
+	if err != nil {
+		return nil, err
+	}
+	return &applyinator.File{
+		Content: base64.StdEncoding.EncodeToString(data),
+		Path:    GetConfigLocation(runtime),
+	}, nil
+}
+
+func ToPromoteConfig(config *config.RuntimeConfig, server string) ([]byte, error) {
+	configObjects := []interface{}{
+		config.ConfigValues,
+	}
+
+	configObjects = append(configObjects, config)
+
+	result := map[string]interface{}{}
+	for _, data := range configObjects {
+		data, err := convert.EncodeToMap(data)
+		if err != nil {
+			return nil, err
+		}
+		delete(data, "extraConfig")
+		delete(data, "rancherValues")
+		data["role"] = "server"
+		data["server"] = server
 		for oldKey, newKey := range normalizeNames {
 			value, ok := data[oldKey]
 			if !ok {

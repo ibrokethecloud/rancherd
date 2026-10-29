@@ -68,3 +68,55 @@ func ToEnableRKE2Agent(_, _, k8sVersion string) (*applyinator.OneTimeInstruction
 	instruction.Command = cmd
 	return instruction, nil
 }
+
+func ToDisableRKE2Agent(_, _, k8sVersion string) (*applyinator.OneTimeInstruction, error) {
+	cmd, err := self.Self()
+	if err != nil {
+		return nil, fmt.Errorf("resolving location of %s: %w", os.Args[0], err)
+	}
+	instruction := &applyinator.OneTimeInstruction{}
+	instruction.Name = "disable-agent"
+	instruction.SaveOutput = true
+	instruction.Args = []string{"retry", "systemctl", "disable", "rke2-agent"}
+	instruction.Command = cmd
+	return instruction, nil
+}
+
+func ToStopRKE2Agent(_, _, k8sVersion string) (*applyinator.OneTimeInstruction, error) {
+	cmd, err := self.Self()
+	if err != nil {
+		return nil, fmt.Errorf("resolving location of %s: %w", os.Args[0], err)
+	}
+	instruction := &applyinator.OneTimeInstruction{}
+	instruction.Name = "stop-agent"
+	instruction.SaveOutput = true
+	instruction.Args = []string{"retry", "systemctl", "stop", "rke2-agent"}
+	instruction.Command = cmd
+	return instruction, nil
+}
+
+func ToEnableRKE2Server(_, _, k8sVersion string) (*applyinator.OneTimeInstruction, error) {
+	cmd, err := self.Self()
+	if err != nil {
+		return nil, fmt.Errorf("resolving location of %s: %w", os.Args[0], err)
+	}
+	instruction := &applyinator.OneTimeInstruction{}
+	instruction.Name = "enable-server"
+	instruction.SaveOutput = true
+	instruction.Args = []string{"retry", "systemctl", "enable", "rke2-server"}
+	instruction.Command = cmd
+	return instruction, nil
+}
+
+func ToStartRKE2Server(_, _, k8sVersion string) (*applyinator.OneTimeInstruction, error) {
+	cmd, err := self.Self()
+	if err != nil {
+		return nil, fmt.Errorf("resolving location of %s: %w", os.Args[0], err)
+	}
+	instruction := &applyinator.OneTimeInstruction{}
+	instruction.Name = "start-server"
+	instruction.SaveOutput = true
+	instruction.Args = []string{"retry", "systemctl", "start", "rke2-server"}
+	instruction.Command = cmd
+	return instruction, nil
+}

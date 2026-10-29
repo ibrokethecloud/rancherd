@@ -56,7 +56,7 @@ func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
 	runtimeName := config.GetRuntime(k8sVersion)
 
 	// config.yaml
-	if err := plan.addFile(runtime.ToJoinFile(&cfg.RuntimeConfig, runtimeName, true)); err != nil {
+	if err := plan.addFile(runtime.ToJoinFile(&cfg.RuntimeConfig, runtimeName, cfg.Server)); err != nil {
 		return nil, err
 	}
 
@@ -221,4 +221,51 @@ func (p *plan) addProbes(cfg *config.Config) error {
 	}
 	p.Probes = probe.AllProbes(config.GetRuntime(k8sVersion))
 	return nil
+}
+
+func ToPromotePlan(cfg *config.Config) (*applyinator.Plan, error) {
+
+	k8sVersion, err := versions.K8sVersion(cfg.KubernetesVersion)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Server == "" {
+		return nil, fmt.Errorf("server is required in config for all roles besides cluster-init")
+	}
+	if cfg.Token == "" {
+		return nil, fmt.Errorf("token is required in config for all roles besides cluster-init")
+	}
+
+	plan := plan{}
+
+	runtimeName := config.GetRuntime(k8sVersion)
+
+	// rke2 allows promotion to achieve this we need to do the following
+	// 1. generate new /etc/rancher/rke2/config.yaml.d/40-rancherd.yaml which contains role updated to server
+	// 2. ensure serverURL is set correctly in 40-rancherd.yaml
+	// 3. stop rke2-agent systemd unit
+	// 4. disable rke2-agent systemd unit
+	// 5. enable rke2-server systemd unit
+	// 6. start rke2-server systemd unit
+
+	// generate new 40-rancherd.yaml
+	if err := plan.addFile(runtime.ToPromoteFile(&cfg.RuntimeConfig, runtimeName, cfg.Server)); err != nil {
+		return nil, err
+	}
+
+	// switch node role
+	if err := plan.addInstruction(runtime.ToStopRKE2Agent("", "", k8sVersion)); err != nil {
+		return nil, err
+	}
+	if err := plan.addInstruction(runtime.ToDisableRKE2Agent("", "", k8sVersion)); err != nil {
+		return nil, err
+	}
+	if err := plan.addInstruction(runtime.ToEnableRKE2Server("", "", k8sVersion)); err != nil {
+		return nil, err
+	}
+	if err := plan.addInstruction(runtime.ToStartRKE2Server("", "", k8sVersion)); err != nil {
+		return nil, err
+	}
+
+	return (*applyinator.Plan)(&plan), nil
 }
